@@ -1,8 +1,9 @@
 
+
 "use client";
-
-import { useState, useEffect } from "react";
-
+import { useState, useEffect, useRef } from "react";
+import * as cocoSsd from "@tensorflow-models/coco-ssd";
+import "@tensorflow/tfjs";
 
 function generateNumber(min: number, max: number) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -126,6 +127,59 @@ function RandomNumberDisplay({ randomNumber }: { randomNumber: number | null }) 
 
 
 export default function Home() {
+  // Camera and detection refs
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const previousBall = useRef<{ x: number; y: number; speed: number } | null>(null);
+  const lastTrigger = useRef<number>(0);
+    // Camera setup
+    const setupCamera = async () => {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+      });
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        return new Promise<void>((resolve) => {
+          videoRef.current!.onloadedmetadata = () => resolve();
+        });
+      }
+    };
+
+    // Ball detection logic
+    const detectFrame = async (model: cocoSsd.ObjectDetection) => {
+      if (!videoRef.current) return;
+      const predictions = await model.detect(videoRef.current);
+      const ball = predictions.find(p => p.class === "sports ball");
+      if (ball) {
+        const [x, y, w, h] = ball.bbox;
+        const centerX = x + w / 2;
+        const centerY = y + h / 2;
+        console.log("Ball detected at:", { centerX, centerY, bbox: ball.bbox });
+        const now = Date.now();
+        if (now - lastTrigger.current > 800) {
+          lastTrigger.current = now;
+          console.log("Ball present! Triggering regenerate()");
+          regenerate();
+        }
+      } else {
+        console.log("No ball detected in this frame.");
+      }
+      requestAnimationFrame(() => detectFrame(model));
+    };
+
+    // Init camera and detection on mount
+    useEffect(() => {
+      const init = async () => {
+        try {
+          await setupCamera();
+          const model = await cocoSsd.load();
+          detectFrame(model);
+        } catch (e) {
+          // Camera/model errors are ignored for now
+        }
+      };
+      init();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [minNumber, setMinNumber] = useState(1);
   const [maxNumber, setMaxNumber] = useState(5);
@@ -156,6 +210,7 @@ export default function Home() {
     }
   };
 
+  
   // Load settings and interaction flag from localStorage on mount
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -232,6 +287,7 @@ export default function Home() {
       applySettings={applySettings}
       randomNumber={randomNumber}
       regenerate={regenerate}
+      videoRef={videoRef}
     />
   );
 }
@@ -249,6 +305,13 @@ function speak(text: string) {
 function MainPage(props: any) {
   return (
     <div className={`relative flex items-center justify-center min-h-screen ${props.randomColor}`}>
+      {/* Video preview for ball detection */}
+      <video
+        ref={props.videoRef}
+        autoPlay
+        playsInline
+        className="absolute top-4 left-4 w-40 opacity-30 rounded"
+      />
       <SettingsIcon openSidebar={props.openSidebar} />
       <SettingsSidebar
         sidebarOpen={props.sidebarOpen}
