@@ -802,9 +802,6 @@ function MainPage(props: any) {
         // Show camera
         showCamera={props.showCamera}
         setShowCamera={props.setShowCamera}
-        // Color tolerance
-        colorTolerance={props.colorTolerance}
-        setColorTolerance={props.setColorTolerance}
       />
       <div className="flex flex-col items-center gap-6 w-full max-w-2xl mx-auto">
         {/* Number/phrase display and controls */}
